@@ -24,6 +24,10 @@ use crate::bindings::policy::{keys, values};
 use crate::bpf::BpfcontainSkel as Skel;
 use crate::policy::rules::*;
 
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::time::Instant;
+
 /// A high-level representation of a BPFContain policy that has been loaded
 /// from a YAML file.
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -207,12 +211,13 @@ impl Policy {
     pub fn containerize(&self) -> Result<()> {
         use bpfcontain_uprobes::do_containerize;
 
+        let now = Instant::now();
         let mut ret: i32 = -libc::EAGAIN;
 
         // Call into uprobe
         do_containerize(&mut ret as *mut i32, self.policy_id());
 
-        match ret {
+        let result = match ret {
             0 => Ok(()),
             n if n == -libc::EAGAIN => bail!("Failed to call into uprobe. Is BPFContain running?"),
             n if n == -libc::ENOENT => bail!(
@@ -222,7 +227,11 @@ impl Policy {
             ),
             n if n == -libc::EINVAL => bail!("Process is already containerized or no room in map"),
             n => bail!("Unknown error: {}", n),
-        }
+        };
+
+        let s = format!("{}", now.elapsed().as_micros());
+        println!("{}", s);
+        result
     }
 }
 
