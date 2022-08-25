@@ -17,6 +17,8 @@ use libbpf_rs::MapFlags;
 use plain::as_bytes;
 use serde::Deserialize;
 
+use std::{fs, io::Write, time::Instant};
+
 use crate::{
     bindings::{
         self,
@@ -209,7 +211,19 @@ impl Policy {
 
     /// Place the current process into a container that obeys this policy.
     pub fn containerize(&self) -> Result<()> {
-        bindings::ioctl::confine(self.policy_id(), None)
+        let now = Instant::now();
+        let result = bindings::ioctl::confine(self.policy_id(), None)?;
+        let s = format!("{}", now.elapsed().as_micros());
+
+        let filename = std::env::var("FILE").expect("$FILE must be set");
+        fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(filename)
+            .unwrap()
+            .write_all(s.as_bytes())?;
+
+        Ok(result)
     }
 }
 
